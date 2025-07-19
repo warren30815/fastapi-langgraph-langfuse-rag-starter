@@ -1,0 +1,60 @@
+services:
+  # PostgreSQL Database for LangFuse
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # LangFuse Server
+  langfuse-server:
+    image: langfuse/langfuse:2
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://langfuse:langfuse@postgres:5432/langfuse
+      NEXTAUTH_SECRET: mysecret
+      SALT: mysalt
+      NEXTAUTH_URL: http://localhost:3000
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+    volumes:
+      - langfuse_data:/app/.next
+
+  # FastAPI Application
+  app:
+    build: .
+    restart: always
+    depends_on:
+      langfuse-server:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    environment:
+      - LANGFUSE_HOST=http://langfuse-server:3000
+      - DATABASE_URL=postgresql://langfuse:langfuse@postgres:5432/langfuse
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
+  langfuse_data:

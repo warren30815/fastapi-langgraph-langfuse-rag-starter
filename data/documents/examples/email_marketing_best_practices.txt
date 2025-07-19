@@ -1,0 +1,71 @@
+Email Marketing Best Practices Guide
+
+1. Subject Line Optimization
+- Keep subject lines between 30-50 characters for optimal mobile display
+- Use personalization tokens like first name when available
+- Create urgency with time-sensitive language ("24 hours left", "Limited time")
+- Avoid spam trigger words like "FREE", "URGENT", "ACT NOW"
+- A/B test different subject line approaches to optimize open rates
+
+2. Email Design and Layout
+- Use responsive design that works on all devices
+- Maintain a single column layout for mobile compatibility
+- Include clear call-to-action (CTA) buttons that are easily tappable
+- Use consistent branding with logo and brand colors
+- Keep email width between 600-800 pixels for desktop optimization
+
+3. Content Strategy
+- Follow the 80/20 rule: 80% valuable content, 20% promotional
+- Use storytelling to engage readers emotionally
+- Include customer testimonials and social proof
+- Provide clear value proposition in the first paragraph
+- Use bullet points and short paragraphs for easy scanning
+
+4. Personalization Techniques
+- Segment audiences based on demographics, behavior, and preferences
+- Use dynamic content to show relevant products or offers
+- Send emails based on customer lifecycle stage (new subscriber, loyal customer, at-risk)
+- Personalize send times based on individual engagement patterns
+- Reference past purchases or browsing history when appropriate
+
+5. Frequency and Timing
+- Start with weekly emails and adjust based on engagement metrics
+- Avoid sending emails on major holidays unless relevant to your business
+- Test different days of the week to find optimal send times
+- Use automation for triggered emails (welcome series, abandoned cart, birthday)
+- Monitor unsubscribe rates to avoid email fatigue
+
+6. List Building and Management
+- Use opt-in forms with clear value propositions
+- Offer lead magnets like ebooks, discounts, or exclusive content
+- Implement double opt-in to ensure quality subscribers
+- Regularly clean your list by removing inactive subscribers
+- Segment new subscribers into welcome series immediately
+
+7. Compliance and Deliverability
+- Include unsubscribe links in every email
+- Add your physical business address in email footers
+- Use authentication protocols (SPF, DKIM, DMARC)
+- Monitor sender reputation and blacklist status
+- Avoid purchased email lists and focus on organic growth
+
+8. Performance Metrics and Testing
+- Track open rates, click-through rates, and conversion rates
+- Monitor deliverability rates and spam complaints
+- Conduct A/B tests on subject lines, send times, and content
+- Use heat mapping to understand email engagement patterns
+- Set up conversion tracking to measure revenue attribution
+
+9. Automation Strategies
+- Welcome email series for new subscribers (5-7 emails over 2 weeks)
+- Abandoned cart recovery sequences (3 emails over 1 week)
+- Re-engagement campaigns for inactive subscribers
+- Post-purchase follow-up and review requests
+- Birthday and anniversary campaigns for customer retention
+
+10. Mobile Optimization
+- Over 60% of emails are opened on mobile devices
+- Use larger fonts (at least 14px) for mobile readability
+- Make CTA buttons at least 44px tall for easy tapping
+- Test emails on multiple devices and email clients
+- Keep preheader text concise and compelling for mobile preview
