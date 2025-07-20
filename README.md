@@ -125,7 +125,8 @@ curl -X POST "http://localhost:8000/api/v1/agent/chat" \
   -H "Content-Type: application/json" \
   -d '{
     "message": "How can I use behavioral segmentation to improve the effectiveness of my email marketing campaigns?",
-    "session_id": "demo_session"
+    "session_id": "demo_session",
+    "user_id": "uuid"
   }'
 ```
 

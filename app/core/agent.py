@@ -1,4 +1,5 @@
 import json
+import random
 import time
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -43,7 +44,7 @@ class EmailMarketingAgent:
         self.llm = ChatOpenAI(
             model="gpt-4o-mini-2024-07-18",
             temperature=settings.temperature,
-            max_tokens=settings.max_tokens,
+            max_tokens=settings.max_output_tokens,
             api_key=settings.openai_api_key,
         )
 
@@ -55,17 +56,17 @@ class EmailMarketingAgent:
         workflow = StateGraph(AgentState)
 
         # Add nodes
-        workflow.add_node("analyze_customer", self._analyze_customer_node)
+        workflow.add_node("fetch_customer_context", self._fetch_customer_context_node)
         workflow.add_node("retrieve_knowledge", self._retrieve_knowledge_node)
         workflow.add_node("web_search", self._web_search_node)
         workflow.add_node("generate_strategy", self._generate_strategy_node)
         workflow.add_node("finalize_strategy", self._finalize_strategy_node)
 
         # Define the flow
-        workflow.set_entry_point("analyze_customer")
+        workflow.set_entry_point("fetch_customer_context")
 
         # Add edges
-        workflow.add_edge("analyze_customer", "retrieve_knowledge")
+        workflow.add_edge("fetch_customer_context", "retrieve_knowledge")
         workflow.add_conditional_edges(
             "retrieve_knowledge",
             self._should_search_web,
@@ -77,47 +78,65 @@ class EmailMarketingAgent:
 
         return workflow.compile()
 
-    async def _analyze_customer_node(self, state: AgentState) -> AgentState:
-        """Analyze customer data and requirements."""
+    async def _fetch_customer_context_node(self, state: AgentState) -> AgentState:
+        """Fetch customer context from mock user database."""
+        # Create Langfuse span for customer context fetch
+        span = (
+            self.current_trace.span(
+                name="fetch_customer_context", input={"step": "customer_context_fetch"}
+            )
+            if hasattr(self, "current_trace")
+            else None
+        )
         try:
+            import asyncio
+
+            latency = random.uniform(0.1, 0.2)
+            await asyncio.sleep(latency)  # Mimic DB latency
             messages = state["messages"]
-            latest_message = messages[-1]["content"] if messages else ""
-
-            # Simple customer analysis for demo
-            analysis_prompt = f"""
-                Extract key information from this customer inquiry:
-                {latest_message}
-
-                Return JSON with:
-                - business_type: type of business
-                - goals: main email marketing goals
-                """
-
-            response = await self.llm.ainvoke(
-                [
-                    SystemMessage(
-                        content="Extract key business info from user messages."
-                    ),
-                    HumanMessage(content=analysis_prompt),
-                ]
+            # user_id should be provided in the message dict, else fallback to None
+            user_id = (
+                messages[-1].get("user_id")
+                if messages and "user_id" in messages[-1]
+                else None
             )
 
-            try:
-                customer_data = json.loads(response.content)
-            except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
-                customer_data = {"analysis": response.content}
+            from app.core.database import get_customer_context
+
+            customer_data = get_customer_context(user_id)
+            if not customer_data:
+                customer_data = {
+                    "error": "User not found in database",
+                    "user_id": user_id,
+                }
 
             state["customer_data"] = customer_data
             state["current_step"] = "customer_analyzed"
 
-            self.logger.info("Customer analysis completed", customer_data=customer_data)
+            self.logger.info(
+                "Customer context fetched (from mock DB)", customer_data=customer_data
+            )
+
+            # End Langfuse span with results
+            if span:
+                span.end(
+                    output={
+                        "user_id": user_id,
+                        "customer_data_found": bool(
+                            customer_data and "error" not in customer_data
+                        ),
+                        "customer_data": customer_data,
+                    }
+                )
 
             return state
 
         except Exception as e:
-            self.logger.error("Customer analysis failed", error=str(e))
-            state["error"] = f"Customer analysis failed: {str(e)}"
+            self.logger.error("Customer context fetch failed", error=str(e))
+            state["error"] = f"Customer context fetch failed: {str(e)}"
+            # End span with error
+            if span:
+                span.end(output={"error": str(e)})
             return state
 
     async def _retrieve_knowledge_node(self, state: AgentState) -> AgentState:
@@ -132,18 +151,18 @@ class EmailMarketingAgent:
         )
 
         try:
+            messages = state["messages"]
+            original_user_question = messages[-1]["content"] if messages else ""
             customer_data = state.get("customer_data", {})
-            latest_message = (
-                state["messages"][-1]["content"] if state["messages"] else ""
+            # Combine user question and customer context for retrieval
+            search_query = (
+                f"{original_user_question}\nCustomer Context: {customer_data}"
             )
-
-            # Create search query
-            search_query = f"Email marketing for {customer_data.get('business_type', 'business')} {customer_data.get('goals', latest_message)}"
 
             # Retrieve relevant documents
             context_data = await rag_system.get_context_for_query(
                 query=search_query,
-                max_context_tokens=1000,
+                max_context_tokens=4000,
                 k=settings.max_retrieval_results,
                 similarity_threshold=settings.similarity_threshold,
             )
@@ -163,7 +182,7 @@ class EmailMarketingAgent:
                 span.end(
                     output={
                         "documents_found": len(context_data["sources"]),
-                        "tokens_used": context_data["total_tokens"],
+                        "documents_tokens": context_data["total_tokens"],
                         "query": search_query,
                     }
                 )
@@ -199,13 +218,17 @@ class EmailMarketingAgent:
         )
 
         try:
-            # Get the original user message
-            messages = state.get("messages", [])
-            original_question = messages[-1]["content"] if messages else ""
-            customer_data = state.get("customer_data", {})
+            import asyncio
 
-            # Create search query for web
-            search_query = f"email marketing {customer_data.get('business_type', '')} {original_question}"
+            latency = random.uniform(0.1, 0.2)
+            await asyncio.sleep(latency)  # Mimic Web Search API latency
+            messages = state.get("messages", [])
+            original_user_question = messages[-1]["content"] if messages else ""
+            customer_data = state.get("customer_data", {})
+            # Combine user question and customer context for web search
+            search_query = (
+                f"{original_user_question}\nCustomer Context: {customer_data}"
+            )
 
             self.logger.info(
                 "No relevant knowledge found, searching web", query=search_query
@@ -263,7 +286,7 @@ class EmailMarketingAgent:
 
             # Get the original user message
             messages = state.get("messages", [])
-            original_question = messages[-1]["content"] if messages else ""
+            original_user_question = messages[-1]["content"] if messages else ""
 
             # Check if context comes from knowledge base or web search
             context_source = (
@@ -272,13 +295,13 @@ class EmailMarketingAgent:
                 else "web search"
             )
 
+            # Include customer_data as context in the prompt
             strategy_prompt = f"""
                 Answer this email marketing question directly and concisely:
 
-                Question: {original_question}
+                Question: {original_user_question}
 
-                Business Type: {customer_data.get('business_type', 'unknown')}
-                Goals: {customer_data.get('goals', 'general marketing')}
+                Customer Context: {customer_data}
 
                 Information from {context_source}:
                 {context[:800] if context else "No specific information available"}
@@ -350,6 +373,7 @@ class EmailMarketingAgent:
     async def process_request(
         self,
         message: str,
+        user_id: str,
         session_id: str,
         conversation_history: List[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
@@ -358,7 +382,7 @@ class EmailMarketingAgent:
         self.current_trace = self.langfuse_client.trace(
             name="email_agent_request",
             session_id=session_id,
-            input={"message": message, "session_id": session_id},
+            input={"message": message, "session_id": session_id, "user_id": user_id},
         )
 
         # Create callback handler and associate it with our trace
@@ -378,9 +402,13 @@ class EmailMarketingAgent:
         try:
             # Initialize state
             messages = conversation_history or []
-            messages.append(
-                {"role": "user", "content": message, "timestamp": time.time()}
-            )
+            user_message = {
+                "role": "user",
+                "content": message,
+                "timestamp": time.time(),
+            }
+            user_message["user_id"] = user_id
+            messages.append(user_message)
 
             initial_state: AgentState = {
                 "messages": messages,

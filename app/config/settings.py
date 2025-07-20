@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # Agent Configuration
     temperature: float = 0.3
-    max_tokens: int = 2000
+    max_output_tokens: int = 1000
 
     class Config:
         env_file = ".env"

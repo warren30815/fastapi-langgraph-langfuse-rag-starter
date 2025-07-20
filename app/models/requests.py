@@ -13,6 +13,9 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = Field(
         None, description="Session ID for conversation tracking"
     )
+    user_id: str = Field(
+        ..., description="User ID for fetching customer context from the database"
+    )
     conversation_history: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="Previous conversation messages"
     )
@@ -51,9 +54,3 @@ class RAGQueryRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = Field(
         None, description="Additional filters for document search"
     )
-
-
-class SessionRequest(BaseModel):
-    """Request model for session operations."""
-
-    session_id: str = Field(..., description="Session ID to retrieve or manage")

@@ -1,12 +1,11 @@
 import uuid
-from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, status
 
 from app.config.logging_config import get_logger
 from app.core.agent import email_agent
 from app.core.rag import rag_system
-from app.models.requests import ChatRequest, RAGQueryRequest, SessionRequest
+from app.models.requests import ChatRequest, RAGQueryRequest
 from app.models.responses import (
     ChatResponse,
     RAGQueryResponse,
@@ -23,7 +22,7 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
     """Chat with the email marketing strategy agent."""
     try:
         # Generate session ID if not provided
-        session_id = request.session_id or f"session_{str(uuid.uuid4())}"
+        session_id = request.session_id or f"{uuid.uuid4().hex}"
 
         logger.info(
             "Chat request received",
@@ -34,6 +33,7 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
         # Process request with agent
         result = await email_agent.process_request(
             message=request.message,
+            user_id=request.user_id,
             session_id=session_id,
             conversation_history=request.conversation_history,
         )
