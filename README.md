@@ -9,7 +9,7 @@ A comprehensive email marketing strategy recommendation system powered by LangGr
 - **Comprehensive LLMOps Monitoring**: Complete observability with LangFuse integration
 - **FAISS Vector Search**: Efficient similarity search for relevant marketing content
 - **Multi-format Document Support**: Process PDF, DOCX, TXT, CSV, and Markdown files
-- **Structured Logging**: JSON-formatted logs with request tracing for production monitoring
+- **OpenTelemetry Logging**: Standardized observability format with trace correlation and Langfuse request context
 - **Docker Compose Deployment**: Easy setup with PostgreSQL, and LangFuse
 
 ## 🛠 Technology Stack
@@ -19,7 +19,7 @@ A comprehensive email marketing strategy recommendation system powered by LangGr
 - **LLMOps**: LangFuse for tracing, monitoring, and prompt management
 - **Vector Database**: FAISS for efficient similarity search
 - **Document Processing**: PyPDF2, python-docx, pandas for multi-format support
-- **Logging**: structlog for structured JSON logging
+- **Logging**: structlog with OpenTelemetry format for standardized observability
 - **Package Management**: uv for fast dependency management
 - **Deployment**: Docker Compose with PostgreSQL
 
@@ -62,13 +62,16 @@ docker-compose logs -f app
 
 ## 🧠 Agent Workflow
 
-The LangGraph agent follows a structured workflow:
+The LangGraph agent follows a structured workflow with complete observability:
 
-1. **Customer Analysis** - Extracts business type, target audience, goals, and constraints
-2. **Knowledge Retrieval** - Searches RAG system for relevant marketing materials
-3. **Strategy Generation** - Creates comprehensive email marketing strategy
-4. **Strategy Refinement** - Enhances strategy with specific recommendations
-5. **Finalization** - Packages strategy with metadata and sources
+1. **Request Context Setup** - Creates Langfuse trace and sets request correlation for OpenTelemetry logging
+2. **Customer Context Fetch** - Retrieves user profile and business context from mock database with simulated latency
+3. **Knowledge Retrieval** - Searches RAG system using combined user query and customer context
+4. **Conditional Web Search** - Falls back to simulated web search if insufficient knowledge base results
+5. **Strategy Generation** - Uses LLM with retrieved context to create targeted email marketing recommendations
+6. **Strategy Finalization** - Packages strategy with metadata, iteration count, and source attribution
+
+Each step is instrumented with Langfuse spans and structured logging, providing complete request traceability from HTTP request through agent execution.
 
 ## 📊 LangFuse Monitoring
 
@@ -102,6 +105,24 @@ docker-compose up postgres langfuse-server -d
 uv run python format.py
 ```
 
+## 🌱 Initial Data Setup
+
+The project includes sample marketing documents and a seeding script:
+
+```bash
+# Seed the vector database with example documents
+uv run python run_local.py
+uv run python seed_data.py
+
+# Or within Docker
+docker-compose exec app python seed_data.py
+```
+
+Sample documents included:
+
+- Customer segmentation strategies
+- Email marketing best practices
+
 ## 📄 Example Usage
 
 ### 1. Upload Marketing Documents
@@ -125,12 +146,12 @@ curl -X POST "http://localhost:8000/api/v1/agent/chat" \
   -H "Content-Type: application/json" \
   -d '{
     "message": "How can I use behavioral segmentation to improve the effectiveness of my email marketing campaigns?",
-    "session_id": "demo_session",
-    "user_id": "uuid"
+    "session_id": "session_id",
+    "user_id": "user_id"
   }'
 ```
 
-### 3. Query Knowledge Base
+### 3. Query Knowledge Base (RAG)
 
 Search for specific marketing information:
 
@@ -143,21 +164,3 @@ curl -X POST "http://localhost:8000/api/v1/agent/query" \
     "similarity_threshold": 0.5
   }'
 ```
-
-## 🌱 Initial Data Setup
-
-The project includes sample marketing documents and a seeding script:
-
-```bash
-# Seed the vector database with example documents
-uv run python seed_data.py
-
-# Or within Docker
-docker-compose exec app python seed_data.py
-```
-
-Sample documents included:
-
-- Customer segmentation strategies
-- Email marketing best practices
-- Real-world case studies and examples
