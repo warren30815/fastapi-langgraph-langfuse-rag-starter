@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langfuse.callback import CallbackHandler
 from langfuse import Langfuse
+from langfuse.callback import CallbackHandler
 from langgraph.graph import END, Graph, StateGraph
 
 from app.config.logging_config import get_logger
@@ -41,7 +41,7 @@ class EmailMarketingAgent:
 
         # Initialize LLM without callback (will be set per request)
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini-2024-07-18",
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
             api_key=settings.openai_api_key,
@@ -95,7 +95,9 @@ class EmailMarketingAgent:
 
             response = await self.llm.ainvoke(
                 [
-                    SystemMessage(content="Extract key business info from user messages."),
+                    SystemMessage(
+                        content="Extract key business info from user messages."
+                    ),
                     HumanMessage(content=analysis_prompt),
                 ]
             )
@@ -121,10 +123,13 @@ class EmailMarketingAgent:
     async def _retrieve_knowledge_node(self, state: AgentState) -> AgentState:
         """Retrieve relevant marketing knowledge."""
         # Create Langfuse span for knowledge retrieval
-        span = self.current_trace.span(
-            name="retrieve_knowledge",
-            input={"step": "knowledge_retrieval"}
-        ) if hasattr(self, 'current_trace') else None
+        span = (
+            self.current_trace.span(
+                name="retrieve_knowledge", input={"step": "knowledge_retrieval"}
+            )
+            if hasattr(self, "current_trace")
+            else None
+        )
 
         try:
             customer_data = state.get("customer_data", {})
@@ -140,7 +145,7 @@ class EmailMarketingAgent:
                 query=search_query,
                 max_context_tokens=1000,
                 k=settings.max_retrieval_results,
-                similarity_threshold=settings.similarity_threshold
+                similarity_threshold=settings.similarity_threshold,
             )
 
             state["retrieved_documents"] = context_data["sources"]
@@ -155,11 +160,13 @@ class EmailMarketingAgent:
 
             # End Langfuse span with results
             if span:
-                span.end(output={
-                    "documents_found": len(context_data["sources"]),
-                    "tokens_used": context_data["total_tokens"],
-                    "query": search_query
-                })
+                span.end(
+                    output={
+                        "documents_found": len(context_data["sources"]),
+                        "tokens_used": context_data["total_tokens"],
+                        "query": search_query,
+                    }
+                )
 
             return state
 
@@ -185,10 +192,11 @@ class EmailMarketingAgent:
     async def _web_search_node(self, state: AgentState) -> AgentState:
         """Search web for additional information when knowledge base is insufficient."""
         # Create Langfuse span for web search
-        span = self.current_trace.span(
-            name="web_search",
-            input={"step": "web_search"}
-        ) if hasattr(self, 'current_trace') else None
+        span = (
+            self.current_trace.span(name="web_search", input={"step": "web_search"})
+            if hasattr(self, "current_trace")
+            else None
+        )
 
         try:
             # Get the original user message
@@ -199,7 +207,9 @@ class EmailMarketingAgent:
             # Create search query for web
             search_query = f"email marketing {customer_data.get('business_type', '')} {original_question}"
 
-            self.logger.info("No relevant knowledge found, searching web", query=search_query)
+            self.logger.info(
+                "No relevant knowledge found, searching web", query=search_query
+            )
 
             # Simulate web search results (in a real implementation, you'd use a web search tool)
             web_context = f"""
@@ -215,18 +225,22 @@ class EmailMarketingAgent:
             """
 
             state["strategy_context"] = web_context
-            state["retrieved_documents"] = [{"source": "web_search", "content": "General best practices"}]
+            state["retrieved_documents"] = [
+                {"source": "web_search", "content": "General best practices"}
+            ]
             state["current_step"] = "web_searched"
 
             self.logger.info("Web search completed")
 
             # End Langfuse span with results
             if span:
-                span.end(output={
-                    "search_query": search_query,
-                    "results_found": "simulated_web_results",
-                    "context_length": len(web_context)
-                })
+                span.end(
+                    output={
+                        "search_query": search_query,
+                        "results_found": "simulated_web_results",
+                        "context_length": len(web_context),
+                    }
+                )
 
             return state
 
@@ -252,7 +266,11 @@ class EmailMarketingAgent:
             original_question = messages[-1]["content"] if messages else ""
 
             # Check if context comes from knowledge base or web search
-            context_source = "knowledge base" if state.get("current_step") == "knowledge_retrieved" else "web search"
+            context_source = (
+                "knowledge base"
+                if state.get("current_step") == "knowledge_retrieved"
+                else "web search"
+            )
 
             strategy_prompt = f"""
                 Answer this email marketing question directly and concisely:
@@ -295,7 +313,6 @@ class EmailMarketingAgent:
             self.logger.error("Strategy generation failed", error=str(e))
             state["error"] = f"Strategy generation failed: {str(e)}"
             return state
-
 
     async def _finalize_strategy_node(self, state: AgentState) -> AgentState:
         """Finalize the strategy with summary and next steps."""
@@ -341,7 +358,7 @@ class EmailMarketingAgent:
         self.current_trace = self.langfuse_client.trace(
             name="email_agent_request",
             session_id=session_id,
-            input={"message": message, "session_id": session_id}
+            input={"message": message, "session_id": session_id},
         )
 
         # Create callback handler and associate it with our trace
@@ -349,7 +366,7 @@ class EmailMarketingAgent:
             secret_key=settings.langfuse_secret_key,
             public_key=settings.langfuse_public_key,
             host=settings.langfuse_host,
-            session_id=session_id
+            session_id=session_id,
         )
 
         # Set the trace manually on the handler

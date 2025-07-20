@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 from app.config.logging_config import get_logger
 from app.config.settings import settings
 from app.utils.document_processor import document_processor
-from app.utils.vector_store import get_vector_store
+from app.utils.vector_store import vector_store
 
 
 class RAGSystem:
@@ -12,7 +12,7 @@ class RAGSystem:
 
     def __init__(self):
         self.logger = get_logger("rag_system")
-        self.vector_store = get_vector_store()
+        self.vector_store = vector_store
 
     async def add_documents_from_files(
         self, files_data: List[Dict[str, Any]]

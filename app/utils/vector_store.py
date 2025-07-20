@@ -1,8 +1,7 @@
-import json
 import os
 import pickle
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import faiss
 import numpy as np
@@ -99,7 +98,9 @@ class FAISSVectorStore:
                 batch_texts = texts[i : i + batch_size]
 
                 # Generate embeddings
-                batch_embeddings = self.embedding_model.embed_documents(batch_texts)
+                batch_embeddings = await self.embedding_model.aembed_documents(
+                    batch_texts
+                )
 
                 # Convert to numpy array and normalize for cosine similarity
                 batch_embeddings = np.array(batch_embeddings)
@@ -119,7 +120,7 @@ class FAISSVectorStore:
                 doc_metadata = {
                     "id": len(self.documents),
                     "text": text,
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(datetime.timezone.utc).isoformat(),
                     **metadata,
                 }
                 self.documents.append(doc_metadata)
@@ -138,7 +139,7 @@ class FAISSVectorStore:
             raise
 
     async def similarity_search(
-        self, query: str, k: int = 5, similarity_threshold: float = 0.7
+        self, query: str, k: int, similarity_threshold: float
     ) -> List[Dict[str, Any]]:
         """Search for similar documents."""
         try:
@@ -147,7 +148,7 @@ class FAISSVectorStore:
                 return []
 
             # Generate query embedding using LangChain OpenAI
-            query_embedding_list = self.embedding_model.embed_query(query)
+            query_embedding_list = await self.embedding_model.aembed_query(query)
 
             # Convert to numpy array and normalize
             query_embedding = np.array([query_embedding_list])
@@ -192,59 +193,6 @@ class FAISSVectorStore:
             return self.documents[doc_id]
         return None
 
-    async def delete_documents(self, doc_ids: List[int]) -> None:
-        """Delete documents by IDs."""
-        try:
-            # Sort in reverse order to maintain indices during deletion
-            doc_ids_sorted = sorted(doc_ids, reverse=True)
-
-            for doc_id in doc_ids_sorted:
-                if 0 <= doc_id < len(self.documents):
-                    del self.documents[doc_id]
-
-            # Rebuild FAISS index
-            if len(self.documents) > 0:
-                texts = [doc["text"] for doc in self.documents]
-
-                # Generate embeddings using LangChain OpenAI
-                embeddings_list = self.embedding_model.embed_documents(texts)
-
-                # Convert to numpy array and normalize
-                embeddings = np.array(embeddings_list)
-                embeddings = embeddings / np.linalg.norm(
-                    embeddings, axis=1, keepdims=True
-                )
-                embeddings = embeddings.astype("float32")
-
-                self.index = faiss.IndexFlatIP(self.embedding_dim)
-                self.index.add(embeddings)
-            else:
-                self.index = faiss.IndexFlatIP(self.embedding_dim)
-
-            # Update document IDs
-            for i, doc in enumerate(self.documents):
-                doc["id"] = i
-
-            self._save_index()
-
-            self.logger.info(
-                "Documents deleted",
-                deleted_count=len(doc_ids),
-                remaining_count=len(self.documents),
-            )
-
-        except Exception as e:
-            self.logger.error("Failed to delete documents", error=str(e))
-            raise
-
 
 # Global vector store instance
-vector_store: Optional[FAISSVectorStore] = None
-
-
-def get_vector_store() -> FAISSVectorStore:
-    """Get or create the global vector store instance."""
-    global vector_store
-    if vector_store is None:
-        vector_store = FAISSVectorStore()
-    return vector_store
+vector_store: FAISSVectorStore = FAISSVectorStore()
