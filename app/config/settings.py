@@ -27,11 +27,10 @@ class Settings(BaseSettings):
     chunk_size: int = 300
     chunk_overlap: int = 50
     max_tokens_per_chunk: int = 1000
-    similarity_threshold: float = 0.5
+    similarity_threshold: float = 0.7
     max_retrieval_results: int = 5
 
     # Agent Configuration
-    max_iterations: int = 10
     temperature: float = 0.3
     max_tokens: int = 2000
 

@@ -1,13 +1,12 @@
-import asyncio
-import os
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import pandas as pd
 import PyPDF2
 import tiktoken
 from docx import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.config.logging_config import get_logger
 from app.config.settings import settings
@@ -19,8 +18,13 @@ class DocumentProcessor:
     def __init__(self):
         self.logger = get_logger("document_processor")
 
-        # Initialize tokenizer for chunk size estimation
+        # Initialize tokenizer for token count calculation
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
+
+        # Initialize text splitter with default settings
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap
+        )
 
         # Supported file extensions
         self.supported_extensions = {".pdf", ".txt", ".csv", ".docx", ".md"}
@@ -29,83 +33,9 @@ class DocumentProcessor:
         """Count tokens in text."""
         return len(self.tokenizer.encode(text))
 
-    def _chunk_text(
-        self,
-        text: str,
-        chunk_size: int = None,
-        chunk_overlap: int = None,
-        max_tokens: int = None,
-    ) -> List[str]:
-        """Split text into chunks with overlap."""
-        chunk_size = chunk_size or settings.chunk_size
-        chunk_overlap = chunk_overlap or settings.chunk_overlap
-        max_tokens = max_tokens or settings.max_tokens_per_chunk
-
-        # Split by sentences first
-        sentences = text.split(". ")
-        chunks = []
-        current_chunk = ""
-
-        for sentence in sentences:
-            # Check if adding this sentence would exceed limits
-            test_chunk = current_chunk + ". " + sentence if current_chunk else sentence
-
-            if (
-                len(test_chunk) <= chunk_size
-                and self._count_tokens(test_chunk) <= max_tokens
-            ):
-                current_chunk = test_chunk
-            else:
-                # Save current chunk if it has content
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-
-                # Start new chunk
-                if (
-                    len(sentence) <= chunk_size
-                    and self._count_tokens(sentence) <= max_tokens
-                ):
-                    current_chunk = sentence
-                else:
-                    # Split long sentence by words if it's too long
-                    words = sentence.split()
-                    current_chunk = ""
-                    for word in words:
-                        test_chunk = (
-                            current_chunk + " " + word if current_chunk else word
-                        )
-                        if (
-                            len(test_chunk) <= chunk_size
-                            and self._count_tokens(test_chunk) <= max_tokens
-                        ):
-                            current_chunk = test_chunk
-                        else:
-                            if current_chunk:
-                                chunks.append(current_chunk.strip())
-                            current_chunk = word
-
-        # Add remaining chunk
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-
-        # Add overlap between chunks
-        if chunk_overlap > 0 and len(chunks) > 1:
-            overlapped_chunks = []
-            for i, chunk in enumerate(chunks):
-                if i == 0:
-                    overlapped_chunks.append(chunk)
-                else:
-                    # Get overlap from previous chunk
-                    prev_chunk = chunks[i - 1]
-                    overlap_text = (
-                        prev_chunk[-chunk_overlap:]
-                        if len(prev_chunk) > chunk_overlap
-                        else prev_chunk
-                    )
-                    overlapped_chunk = overlap_text + " " + chunk
-                    overlapped_chunks.append(overlapped_chunk)
-            chunks = overlapped_chunks
-
+    def _chunk_text(self, text: str) -> List[str]:
+        """Split text into chunks using RecursiveCharacterTextSplitter."""
+        chunks = self.text_splitter.split_text(text)
         return [chunk for chunk in chunks if chunk.strip()]
 
     async def _process_pdf(

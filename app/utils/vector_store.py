@@ -1,6 +1,6 @@
 import os
 import pickle
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import faiss
@@ -120,7 +120,7 @@ class FAISSVectorStore:
                 doc_metadata = {
                     "id": len(self.documents),
                     "text": text,
-                    "created_at": datetime.now(datetime.timezone.utc).isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                     **metadata,
                 }
                 self.documents.append(doc_metadata)
