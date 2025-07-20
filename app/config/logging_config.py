@@ -1,30 +1,59 @@
 import logging
+import os
 import sys
 import uuid
 from contextvars import ContextVar
+from datetime import datetime
 from typing import Any, Dict
 
 import structlog
 
 # Context variables for request tracking
 http_request_id_var: ContextVar[str] = ContextVar("http_request_id", default="")
-langfuse_trace_id_var: ContextVar[str] = ContextVar("langfuse_trace_id", default="")
+langfuse_request_id_var: ContextVar[str] = ContextVar("langfuse_request_id", default="")
 
 
-def add_trace_context(logger, method_name, event_dict):
-    """Add trace context to log events."""
+def opentelemetry_formatter(logger, method_name, event_dict):
+    """Format log events according to OpenTelemetry standards."""
+    # Get context variables
     http_request_id = http_request_id_var.get("")
-    langfuse_trace_id = langfuse_trace_id_var.get("")
+    langfuse_request_id = langfuse_request_id_var.get("")
 
-    # Include HTTP request ID for correlation
-    if http_request_id:
-        event_dict["http_request_id"] = http_request_id
+    # Create OpenTelemetry formatted log record
+    otel_record = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "trace_id": http_request_id or None,
+        "span_id": None,  # Can be extended in the future
+        "severity_number": _get_severity_number(event_dict.get("level", "info")),
+        "severity_text": event_dict.get("level", "info").upper(),
+        "body": event_dict.get("event", ""),
+        "resource": {
+            "service.name": os.getenv("SERVICE_NAME", "fastapi-langgraph-rag"),
+            "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
+        },
+        "attributes": {},
+    }
 
-    # Include Langfuse trace ID when available
-    if langfuse_trace_id:
-        event_dict["langfuse_trace_id"] = langfuse_trace_id
+    # Add logger name as attribute
+    if "logger" in event_dict:
+        otel_record["attributes"]["logger"] = event_dict["logger"]
 
-    return event_dict
+    # Add langfuse request ID as attribute if available
+    if langfuse_request_id:
+        otel_record["attributes"]["langfuse_request_id"] = langfuse_request_id
+
+    # Add all other fields as attributes
+    for key, value in event_dict.items():
+        if key not in ["event", "level", "logger", "timestamp"]:
+            otel_record["attributes"][key] = value
+
+    return otel_record
+
+
+def _get_severity_number(level_name: str) -> int:
+    """Convert log level name to OpenTelemetry severity number."""
+    level_mapping = {"debug": 5, "info": 9, "warning": 13, "error": 17, "critical": 21}
+    return level_mapping.get(level_name.lower(), 9)
 
 
 def configure_logging(log_level: str = "INFO") -> None:
@@ -40,25 +69,14 @@ def configure_logging(log_level: str = "INFO") -> None:
     # Configure structlog
     structlog.configure(
         processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            add_trace_context,  # Add trace context to all logs
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
+            opentelemetry_formatter,  # Format as OpenTelemetry standard
             structlog.processors.JSONRenderer(),
         ],
-        context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
     )
 
 
-def get_logger(name: str) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str):
     """Get a structured logger instance with trace context."""
     return structlog.get_logger(name)
 
@@ -68,23 +86,9 @@ def set_http_request_context(http_request_id: str):
     http_request_id_var.set(http_request_id)
 
 
-def set_langfuse_context(langfuse_trace_id: str):
-    """Set Langfuse trace context without overwriting HTTP request context."""
-    langfuse_trace_id_var.set(langfuse_trace_id)
-
-
-def set_request_context(request_id: str, span_id: str = None):
-    """Legacy function for backwards compatibility - sets HTTP request context."""
-    # This function remains only for any existing code that might still use it
-    set_http_request_context(request_id)
-
-
-def get_trace_context() -> Dict[str, str]:
-    """Get current trace context for correlation."""
-    return {
-        "http_request_id": http_request_id_var.get(""),
-        "langfuse_trace_id": langfuse_trace_id_var.get(""),
-    }
+def set_langfuse_request_context(langfuse_request_id: str):
+    """Set Langfuse request context for current async context."""
+    langfuse_request_id_var.set(langfuse_request_id)
 
 
 def generate_request_id() -> str:

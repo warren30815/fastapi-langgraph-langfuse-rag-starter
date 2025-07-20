@@ -9,7 +9,7 @@ from langfuse import Langfuse
 from langfuse.callback import CallbackHandler
 from langgraph.graph import END, Graph, StateGraph
 
-from app.config.logging_config import get_logger
+from app.config.logging_config import get_logger, set_langfuse_request_context
 from app.config.settings import settings
 from app.core.rag import rag_system
 
@@ -384,6 +384,9 @@ class EmailMarketingAgent:
             session_id=session_id,
             input={"message": message, "session_id": session_id, "user_id": user_id},
         )
+
+        # Set Langfuse request context for logging
+        set_langfuse_request_context(self.current_trace.id)
 
         # Create callback handler and associate it with our trace
         self.langfuse_handler = CallbackHandler(
