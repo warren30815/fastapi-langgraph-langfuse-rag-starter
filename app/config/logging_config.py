@@ -19,13 +19,16 @@ def opentelemetry_formatter(logger, method_name, event_dict):
     http_request_id = http_request_id_var.get("")
     langfuse_request_id = langfuse_request_id_var.get("")
 
+    # Determine log level from method name if not in event_dict
+    level = event_dict.get("level", method_name.lower() if method_name else "info")
+
     # Create OpenTelemetry formatted log record
     otel_record = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "trace_id": http_request_id or None,
         "span_id": None,  # Can be extended in the future
-        "severity_number": _get_severity_number(event_dict.get("level", "info")),
-        "severity_text": event_dict.get("level", "info").upper(),
+        "severity_number": _get_severity_number(level),
+        "severity_text": level.upper(),
         "body": event_dict.get("event", ""),
         "resource": {
             "service.name": os.getenv("SERVICE_NAME", "fastapi-langgraph-rag"),
