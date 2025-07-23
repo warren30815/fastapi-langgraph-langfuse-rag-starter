@@ -46,6 +46,7 @@ class EmailMarketingAgent:
             temperature=settings.temperature,
             max_tokens=settings.max_output_tokens,
             api_key=settings.openai_api_key,
+            output_version="responses/v1"
         )
 
         # Build the agent graph
@@ -218,49 +219,47 @@ class EmailMarketingAgent:
         )
 
         try:
-            import asyncio
-
-            latency = random.uniform(0.1, 0.2)
-            await asyncio.sleep(latency)  # Mimic Web Search API latency
             messages = state.get("messages", [])
             original_user_question = messages[-1]["content"] if messages else ""
             customer_data = state.get("customer_data", {})
-            # Combine user question and customer context for web search
-            search_query = (
-                f"{original_user_question}\nCustomer Context: {customer_data}"
-            )
+
+            # Create search query combining user question and customer context
+            search_query = f"Use web search tool for search user question on internet. User question: {original_user_question}"
+            if customer_data and "error" not in customer_data:
+                search_query += f" for {customer_data.get('industry', 'business')} industry"
 
             self.logger.info(
                 "No relevant knowledge found, searching web", query=search_query
             )
 
-            # Simulate web search results (in a real implementation, you'd use a web search tool)
-            web_context = f"""
-            Web search results for: {search_query}
+            # Bind ChatOpenAI existing web search tool
+            # doc: https://python.langchain.com/api_reference/openai/chat_models/langchain_openai.chat_models.base.ChatOpenAI.html
+            tool = {"type": "web_search_preview"}
+            llm_with_tools = self.llm.bind_tools([tool])
 
-            General email marketing best practices:
-            - Personalize subject lines to increase open rates
-            - Segment your audience based on behavior and demographics
-            - Use A/B testing to optimize campaign performance
-            - Ensure mobile-friendly design
-            - Include clear call-to-action buttons
-            - Monitor key metrics like open rates, click rates, and conversions
-            """
+            # Perform web search
+            response: AIMessage = await llm_with_tools.ainvoke(search_query)
+            # Find the first 'type': 'text' entry in response.content
+            web_context = None
+            if response.content:
+                for item in response.content:
+                    if isinstance(item, dict) and item.get("type") == "text" and "text" in item:
+                        web_context = item["text"]
+                        break
+            if not web_context:
+                web_context = "No web search results found."
 
             state["strategy_context"] = web_context
-            state["retrieved_documents"] = [
-                {"source": "web_search", "content": "General best practices"}
-            ]
             state["current_step"] = "web_searched"
 
-            self.logger.info("Web search completed")
+            self.logger.info("Web search completed", context_length=len(web_context))
 
             # End Langfuse span with results
             if span:
                 span.end(
                     output={
                         "search_query": search_query,
-                        "results_found": "simulated_web_results",
+                        "results_found": "web_search_results",
                         "context_length": len(web_context),
                     }
                 )
@@ -304,7 +303,7 @@ class EmailMarketingAgent:
                 Customer Context: {customer_data}
 
                 Information from {context_source}:
-                {context[:800] if context else "No specific information available"}
+                {context if context else "No specific information available"}
 
                 Return JSON with:
                 - answer: Direct answer to the user's question
@@ -312,7 +311,7 @@ class EmailMarketingAgent:
                 - source: "{context_source}"
                 """
 
-            response = await self.llm.ainvoke(
+            response: AIMessage = await self.llm.ainvoke(
                 [
                     SystemMessage(content="Create simple email marketing strategies."),
                     HumanMessage(content=strategy_prompt),
@@ -320,9 +319,9 @@ class EmailMarketingAgent:
             )
 
             try:
-                strategy = json.loads(response.content)
+                strategy = json.loads(response.content[0]["text"])
             except json.JSONDecodeError:
-                strategy = {"strategy": response.content}
+                strategy = {"strategy": response.content[0]["text"]}
 
             state["final_strategy"] = strategy
             state["iteration_count"] = iteration + 1

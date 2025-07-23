@@ -147,7 +147,7 @@ curl -X POST "http://localhost:8000/api/v1/agent/chat" \
   -d '{
     "message": "How can I use behavioral segmentation to improve the effectiveness of my email marketing campaigns?",
     "session_id": "session_id",
-    "user_id": "user_id"
+    "user_id": "user_id" # you can find in database.py
   }'
 ```
 
